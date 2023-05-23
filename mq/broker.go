@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type Broker interface {
+type IBroker interface {
 	publish(topic string, msg interface{}) error
 	subscribe(topic string) (<-chan interface{}, error)
 	unsubscribe(topic string, sub <-chan interface{}) error
@@ -20,11 +20,11 @@ publish：進行消息的推送，有两個参數即topic、msg，分别是訂�
 subscribe：消息的訂閱，傳入訂閱的主題，即可完成訂閱，并返回對應的channel通道用来接收數據
 unsubscribe：取消訂閱，傳入訂閱的主題和對應的通道
 close：這個的作用就是很明顯了，就是用来關閉消息队列的
-broadCast：這個屬於内部方法，作用是進行廣播，對推送的消息進行广播，保証每一個訂閱者都可以收到
-setConditions：這裡是用来設置條件，條件就是消息队列的容量，這樣我们就可以控制消息队列的大小了
+broadCast：這個屬於内部方法，作用是進行廣播，對推送的消息進行廣播，保証每一個訂閱者都可以收到
+setConditions：這裡是用来設置條件，條件就是消息队列的容量，這樣我们就可以控制消息對列的大小了
 */
 
-type BrokerImpl struct {
+type Broker struct {
 	exit     chan bool
 	capacity int
 
@@ -34,37 +34,37 @@ type BrokerImpl struct {
 
 /*
 
-exit：也是一个通道，这个用来做关闭消息队列用的
-capacity：即用来设置消息队列的容量
-topics：这里使用一个map结构，key即是topic，其值则是一个切片，chan类型，这里这么做的原因是我们一个topic可以有多个订阅者，所以一个订阅者对应着一个通道
-sync.RWMutex：读写锁，这里是为了防止并发情况下，数据的推送出现错误，所以采用加锁的方式进行保证
+exit：也是一个通道，這個用来做關閉消息隊列用的
+capacity：即用来設置消息隊列的容量
+topics：這裡使用一个map結構，key即是topic，其值是一个切片，chan類型，這麼做的原因是我们一个topic可以有多個訂閱者，所以一个訂閱者對應著一個通道
+sync.RWMutex：讀寫鎖，這裡是為了防止併發情况下，數據的推送出現錯誤，所以採用加鎖的方式進行保證
 */
 
-func NewBroker() *BrokerImpl {
-	return &BrokerImpl{
+func NewBroker() *Broker {
+	return &Broker{
 		exit:   make(chan bool),
 		topics: make(map[string][]chan interface{}),
 	}
 }
 
-func (b *BrokerImpl) setConditions(capacity int) {
+func (b *Broker) setConditions(capacity int) {
 	b.capacity = capacity
 }
 
-func (b *BrokerImpl) close() {
+func (b *Broker) close() {
 	select {
 	case <-b.exit:
 		return
 	default:
+		/// 關閉 channel
 		close(b.exit)
 		b.Lock()
 		b.topics = make(map[string][]chan interface{})
 		b.Unlock()
 	}
-	return
 }
 
-func (b *BrokerImpl) publish(topic string, pub interface{}) error {
+func (b *Broker) publish(topic string, pub interface{}) error {
 	select {
 	case <-b.exit:
 		return errors.New("broker closed")
@@ -82,7 +82,7 @@ func (b *BrokerImpl) publish(topic string, pub interface{}) error {
 	return nil
 }
 
-func (b *BrokerImpl) broadcast(msg interface{}, subscribers []chan interface{}) {
+func (b *Broker) broadcast(msg interface{}, subscribers []chan interface{}) {
 	count := len(subscribers)
 	concurrency := 1
 
@@ -121,7 +121,7 @@ func (b *BrokerImpl) broadcast(msg interface{}, subscribers []chan interface{}) 
 	}
 }
 
-func (b *BrokerImpl) subscribe(topic string) (<-chan interface{}, error) {
+func (b *Broker) subscribe(topic string) (<-chan interface{}, error) {
 	select {
 	case <-b.exit:
 		return nil, errors.New("broker closed")
@@ -135,7 +135,7 @@ func (b *BrokerImpl) subscribe(topic string) (<-chan interface{}, error) {
 	return ch, nil
 }
 
-func (b *BrokerImpl) unsubscribe(topic string, sub <-chan interface{}) error {
+func (b *Broker) unsubscribe(topic string, sub <-chan interface{}) error {
 	select {
 	case <-b.exit:
 		return errors.New("broker closed")

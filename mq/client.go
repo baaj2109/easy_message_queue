@@ -1,7 +1,7 @@
 package mq
 
 type Client struct {
-	bro *BrokerImpl
+	bro *Broker
 }
 
 func NewClient() *Client {
